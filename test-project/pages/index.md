@@ -1,45 +1,26 @@
-```sql budgets
-SELECT * FROM ynab.budgets
+```sql checking_account_activity
+SELECT a.name, date_trunc('week', t.date) as weekof, COUNT(DISTINCT t.id) as transactions, SUM(t.amount) as total, AVG(t.amount) as avg  FROM ynab.transactions t
+    INNER JOIN ynab.accounts a on t.account_id = a.id
+WHERE a.type in ('checking') AND (${inputs.selected_month} IS null OR '${inputs.selected_month}' = DATE_TRUNC('month', t.date))
+GROUP BY ALL
 ```
 
-```sql accounts
-SELECT * FROM ynab.budgetAccounts ba
-ORDER BY ba.type, ba.name
+```sql category_activity
+SELECT c.name, date_trunc('week', t.date) as weekof, COUNT(DISTINCT t.id) as transactions, SUM(t.amount) as total, AVG(t.amount) as avg  FROM ynab.transactions t
+    INNER JOIN ynab.categories c on t.category_id = c.id
+WHERE ${inputs.selected_month} IS null OR '${inputs.selected_month}' = DATE_TRUNC('month', t.date)
+GROUP BY ALL
 ```
 
-```sql non_debt_accounts
-SELECT * FROM ynab.budgetAccounts ba
-WHERE ba.type IN ('checking', 'savings', 'cash')
-AND ba.balance > 1
-ORDER BY ba.type, ba.name
+```sql months
+SELECT DATE_TRUNC('month', m.month)::text as value,
+        strftime(m.month, '%b %Y')  as label FROM ynab.months m
 ```
 
-```sql categoryGroups
-SELECT * FROM ynab.categoryGroups cg
-```
+<Dropdown name="selected_month" data={months} value="value" label="label" title="Selected Month">
+        <DropdownOption valueLabel="All Time" value="null" />
+</Dropdown>
 
-```sql categories
-SELECT cg.id as groupId, cg.name as group, c.name as category, c.budgeted, c.activity, c.balance FROM ynab.categoryGroups cg
-    INNER JOIN ynab.categories c ON c.category_group_id = cg.id
-```
 
-<BarChart title="Account Summary" data={non_debt_accounts} x="name" series="type" y="balance" yFmt="usd" />
-
-<Accordion>
-    {#each categoryGroups as cg}
-        {@const cats = categories.where(`groupId = '${cg.id}'`)}
-        {#if cats.length}
-        <AccordionItem id={cg.id} title={cg.name}>
-            <div class="grid grid-cols-4 gap-y-2 items-center justify-center gap-x-4">
-            {#each cats as category}
-                <span class="text-md font-bold">{category.category}</span>
-
-                <BigValue data={category} value="budgeted" fmt="usd" />
-                <BigValue data={category} value="activity" fmt="usd" />
-                <BigValue data={category} value="balance" fmt="usd" />
-            {/each}
-            </div >
-        </AccordionItem>
-        {/if}
-    {/each}
-</Accordion>
+<BarChart title="Checking Account Activity" data={checking_account_activity} x="weekof" series="name" y="transactions" handleMissing="zero" />
+<BarChart title="Category Activity" data={category_activity} x="weekof" series="name" y="transactions" handleMissing="zero" />

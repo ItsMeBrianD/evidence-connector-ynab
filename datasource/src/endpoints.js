@@ -69,7 +69,7 @@ const BudgetSchema = z.object({
     .nullable()
     .transform((z) => (z ? new Date(z) : z)),
   accounts: z.array(AccountSchema),
-})
+});
 
 const BudgetResponseSchema = z.object({
   data: z.object({
@@ -185,7 +185,6 @@ const CategoryGroupSchema = z.object({
   categories: z.array(CategorySchema),
 });
 
-// TODO: Fill this out
 const CategoryResponseSchema = z.object({
   data: z.object({
     category_groups: z.array(CategoryGroupSchema),
@@ -241,18 +240,247 @@ export const categories = {
    */
   transform(data) {
     return {
-      categories: data.data.category_groups.map((group) => group.categories).flat(),
-      categoryGroups: data.data.category_groups.map((group) => ({ ...group, categories: undefined})),
-    }
-
-  }
+      categories: data.data.category_groups
+        .map((group) => group.categories)
+        .flat(),
+      categoryGroups: data.data.category_groups.map((group) => ({
+        ...group,
+        categories: undefined,
+      })),
+    };
+  },
 };
 
-const PayeeSchema = z.object({});
-export const payees = {};
+const PayeeSchema = z.object({
+  data: z.object({
+    payees: z.array(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        transfer_account_id: z.string().nullable(),
+        deleted: z.boolean(),
+      }),
+    ),
+  }),
+});
 
-const MonthSchema = z.object({});
-export const months = {};
+export const payees = {
+  endpoint: "/budgets/:budgetId/payees",
+  value: PayeeSchema,
+  columnTypes: [
+    { name: "id", evidenceType: "string", typeGranularity: "precise" },
+    { name: "budgetId", evidenceType: "string", typeGranularity: "precise" },
+    { name: "name", evidenceType: "string", typeGranularity: "precise" },
+    {
+      name: "transfer_account_id",
+      evidenceType: "string",
+      typeGranularity: "precise",
+    },
+    { name: "deleted", evidenceType: "boolean", typeGranularity: "precise" },
+  ],
+  /**
+   *
+   * @param {z.infer<typeof PayeeSchema>} data
+   * @param {string} budgetId
+   * @returns {Array<z.infer<typeof PayeeSchema>["data"]["payees"][number] & {budgetId: string}>}
+   */
+  transform(data, budgetId) {
+    return data.data.payees.map((p) => ({ ...p, budgetId }));
+  },
+};
 
-const TransactionSchema = z.object({});
-export const transactions = {};
+// TODO: Fetch detail?
+const MonthSchema = z.object({
+  data: z.object({
+    months: z.array(
+      z.object({
+        month: z.string().transform((z) => (z ? new Date(z) : z)),
+        note: z.string().nullable(),
+        income: ApiMilliunit,
+        budgeted: ApiMilliunit,
+        activity: ApiMilliunit,
+        to_be_budgeted: ApiMilliunit,
+        age_of_money: z.number(),
+        deleted: z.boolean(),
+      }),
+    ),
+  }),
+});
+export const months = {
+  endpoint: "/budgets/:budgetId/months",
+  value: MonthSchema,
+  columnTypes: [
+    { name: "budgetId", evidenceType: "string", typeGranularity: "precise" },
+    { name: "month", evidenceType: "date", typeGranularity: "precise" },
+    { name: "note", evidenceType: "string", typeGranularity: "precise" },
+    { name: "income", evidenceType: "number", typeGranularity: "precise" },
+    { name: "budgeted", evidenceType: "number", typeGranularity: "precise" },
+    { name: "activity", evidenceType: "number", typeGranularity: "precise" },
+    {
+      name: "to_be_budgeted",
+      evidenceType: "number",
+      typeGranularity: "precise",
+    },
+    {
+      name: "age_of_money",
+      evidenceType: "number",
+      typeGranularity: "precise",
+    },
+    { name: "deleted", evidenceType: "boolean", typeGranularity: "precise" },
+  ],
+  /**
+   * @param {z.infer<typeof MonthSchema>} data
+   * @param {string} budgetId
+   * @returns {Array<z.infer<typeof MonthSchema>["data"]["months"][number] & {budgetId: string}>}
+   */
+  transform(data, budgetId) {
+    return data.data.months.map((p) => ({ ...p, budgetId }));
+  },
+};
+
+const SubtransactionSchema = z.object({
+  id: z.string(),
+  transaction_id: z.string(),
+  amount: z.number(),
+  memo: z.string().nullable(),
+  payee_id: z.string().uuid().nullable(),
+  payee_name: z.string().nullable(),
+  category_id: z.string().uuid().nullable(),
+  category_name: z.string().nullable(),
+  transfer_account_id: z.string().uuid().nullable(),
+  transfer_transaction_id: z.string().nullable(),
+  deleted: z.boolean(),
+});
+
+const TransactionSchema = z.object({
+  data: z.object({
+    transactions: z.array(
+      z.object({
+        id: z.string(),
+        date: z.string().transform((z) => (z ? new Date(z) : z)),
+        amount: z.number(),
+        memo: z.string().nullable(),
+        cleared: z.enum(["cleared", "uncleared", "reconciled"]),
+        approved: z.boolean(),
+        flag_color: z.string().nullable(),
+        account_id: z.string().uuid(),
+        payee_id: z.string().uuid().nullable(),
+        category_id: z.string().uuid().nullable(),
+        transfer_account_id: z.string().uuid().nullable(),
+        transfer_transaction_id: z.string().nullable(),
+        import_id: z.string().nullable(),
+        import_payee_name: z.string().nullable(),
+        import_payee_name_original: z.string().nullable(),
+        debt_transaction_type: z.string().nullable(),
+        deleted: z.boolean(),
+        account_name: z.string(),
+        payee_name: z.string().nullable(),
+        category_name: z.string().nullable(),
+        subtransactions: z.array(SubtransactionSchema),
+      }),
+    ),
+  }),
+});
+export const transactions = {
+  endpoint: "/budgets/:budgetId/transactions",
+  value: TransactionSchema,
+  columnTypes: {
+    transactions: [
+      { name: "id", evidenceType: "string", typeFidelity: "precise" },
+      { name: "budgetId", evidenceType: "string", typeFidelity: "precise" },
+      { name: "date", evidenceType: "date", typeFidelity: "precise " },
+      { name: "amount", evidenceType: "number", typeFidelity: "precise " },
+      { name: "memo", evidenceType: "string", typeFidelity: "precise " },
+      { name: "cleared", evidenceType: "string", typeFidelity: "precise " },
+      { name: "approved", evidenceType: "boolean", typeFidelity: "precise " },
+      { name: "flag_color", evidenceType: "string", typeFidelity: "precise " },
+      { name: "account_id", evidenceType: "string", typeFidelity: "precise " },
+      { name: "payee_id", evidenceType: "string", typeFidelity: "precise " },
+      { name: "category_id", evidenceType: "string", typeFidelity: "precise " },
+      {
+        name: "transfer_account_id",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      {
+        name: "transfer_transaction_id",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      { name: "import_id", evidenceType: "string", typeFidelity: "precise " },
+      {
+        name: "import_payee_name",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      {
+        name: "import_payee_name_original",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      {
+        name: "debt_transaction_type",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      { name: "deleted", evidenceType: "boolean", typeFidelity: "precise " },
+      {
+        name: "account_name",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+      { name: "payee_name", evidenceType: "string", typeFidelity: "precise " },
+      {
+        name: "category_name",
+        evidenceType: "string",
+        typeFidelity: "precise ",
+      },
+    ],
+    subtransactions: [
+      { name: "id", evidenceType: "string", typeFidelity: "precise" },
+      {
+        name: "transaction_id",
+        evidenceType: "string",
+        typeFidelity: "precise",
+      },
+      { name: "amount", evidenceType: "number", typeFidelity: "precise" },
+      { name: "memo", evidenceType: "string", typeFidelity: "precise" },
+      { name: "payee_id", evidenceType: "string", typeFidelity: "precise" },
+      { name: "payee_name", evidenceType: "string", typeFidelity: "precise" },
+      { name: "category_id", evidenceType: "string", typeFidelity: "precise" },
+      {
+        name: "category_name",
+        evidenceType: "string",
+        typeFidelity: "precise",
+      },
+      {
+        name: "transfer_account_id",
+        evidenceType: "string",
+        typeFidelity: "precise",
+      },
+      {
+        name: "transfer_transaction_id",
+        evidenceType: "string",
+        typeFidelity: "precise",
+      },
+      { name: "deleted", evidenceType: "boolean", typeFidelity: "precise" },
+    ],
+  },
+  /**
+   * @param {z.infer<typeof TransactionSchema>} data
+   * @param {string} budgetId
+   * @returns { { transactions: Array<z.infer<typeof TransactionSchema>["data"]["transactions"][number] & {budgetId: string}>, subtransactions: Array<z.infer<typeof SubtransactionSchema> & { budgetId: string }> } }
+   */
+  transform(data, budgetId) {
+    return {
+      transactions: data.data.transactions.map((t) => ({
+        ...t,
+        subtransactions: undefined,
+        budgetId: budgetId,
+      })),
+      subtransactions: data.data.transactions
+        .map((t) => t.subtransactions.map((st) => ({ ...st, budgetId })))
+        .flat(),
+    };
+  },
+};

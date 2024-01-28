@@ -62,11 +62,11 @@ export async function* processSource(options) {
 
   const budgetResponse = await request(
     endpoints.budget.endpoint,
-    options.accessToken
+    options.accessToken,
   );
 
   const { budgets, budgetAccounts } = endpoints.budget.transform(
-    endpoints.budget.value.parse(budgetResponse)
+    endpoints.budget.value.parse(budgetResponse),
   );
 
   const currentMs = new Date().getTime();
@@ -81,7 +81,7 @@ export async function* processSource(options) {
   };
 
   yield {
-    name: "budgetAccounts",
+    name: "accounts",
     columnTypes: endpoints.budget.columnTypes.budgetAccounts,
     rows: budgetAccounts,
     content: contentHash,
@@ -89,17 +89,48 @@ export async function* processSource(options) {
 
   const allCategories = [];
   const allCategoryGroups = [];
+  const allPayees = [];
+  const allMonths = [];
+  const allTransactions = [];
+  const allSubtransactions = [];
+
   for (const budget of budgets) {
     const categoryResponse = await request(
       endpoints.categories.endpoint.replace(":budgetId", budget.id),
-      options.accessToken
-    );
-    const { categories, categoryGroups } = endpoints.categories.transform(
-      endpoints.categories.value.parse(categoryResponse)
+      options.accessToken,
     );
 
-    allCategories.push(...categories),
-      allCategoryGroups.push(...categoryGroups);
+    const { categories, categoryGroups } = endpoints.categories.transform(
+      endpoints.categories.value.parse(categoryResponse),
+    );
+    allCategories.push(...categories);
+    allCategoryGroups.push(...categoryGroups);
+
+    const payeeResponse = await request(
+      endpoints.payees.endpoint.replace(":budgetId", budget.id),
+      options.accessToken,
+    );
+    const payees = endpoints.payees.value.parse(payeeResponse);
+    allPayees.push(...endpoints.payees.transform(payees, budget.id));
+
+    const monthsResponse = await request(
+      endpoints.months.endpoint.replace(":budgetId", budget.id),
+      options.accessToken,
+    );
+
+    const months = endpoints.months.value.parse(monthsResponse);
+    allMonths.push(...endpoints.months.transform(months, budget.id));
+
+    const transactionsResponse = await request(
+      endpoints.transactions.endpoint.replace(":budgetId", budget.id),
+      options.accessToken,
+    );
+    const { transactions, subtransactions } = endpoints.transactions.transform(
+      endpoints.transactions.value.parse(transactionsResponse),
+      budget.id,
+    );
+    allTransactions.push(...transactions);
+    allSubtransactions.push(...subtransactions);
   }
 
   yield {
@@ -112,6 +143,30 @@ export async function* processSource(options) {
     name: "categoryGroups",
     columnTypes: endpoints.categories.columnTypes.categoryGroups,
     rows: allCategoryGroups,
+    content: contentHash,
+  };
+  yield {
+    name: "payees",
+    columnTypes: endpoints.payees.columnTypes,
+    rows: allPayees,
+    content: contentHash,
+  };
+  yield {
+    name: "months",
+    columnTypes: endpoints.months.columnTypes,
+    rows: allMonths,
+    content: contentHash,
+  };
+  yield {
+    name: "transactions",
+    columnTypes: endpoints.transactions.columnTypes.transactions,
+    rows: allTransactions,
+    content: contentHash,
+  };
+  yield {
+    name: "subtransactions",
+    columnTypes: endpoints.transactions.columnTypes.subtransactions,
+    rows: allSubtransactions,
     content: contentHash,
   };
 
@@ -132,7 +187,9 @@ export const testConnection = async (opts) => {
     const r = await request(endpoints.user.endpoint, opts.accessToken);
     endpoints.user.value.parse(r);
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    return {
+      reason: e instanceof Error ? e.message : e,
+    };
   }
 };
